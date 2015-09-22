@@ -1,12 +1,12 @@
 <?php
-use Browser\Casper;
+use maxlen\browser\casper;
 
-class CasperTest extends PHPUnit_Framework_TestCase
+class CasperTest extends PHPUnit
 {
     public function testCreateInstance()
     {
         $casper = new Casper();
-        $this->assertInstanceOf('Browser\Casper', $casper);
+        $this->assertInstanceOf('maxlen\browser\casper', $casper);
     }
 
     public function testStart_onGoogleSearchPage()
