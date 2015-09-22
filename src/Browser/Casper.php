@@ -1,5 +1,5 @@
 <?php
-namespace maxlen\browser;
+namespace Browser;
 
 /**
  * CasperJS wrapper
