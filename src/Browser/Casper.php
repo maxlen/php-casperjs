@@ -1,5 +1,4 @@
-<?php
-namespace maxlen\casperjs;
+<?php namespace maxlen\casperjs;
 
 /**
  * CasperJS wrapper
@@ -13,11 +12,10 @@ namespace maxlen\casperjs;
  */
 class Casper
 {
-    private $_TAG_CURRENT_URL = '[CURRENT_URL]';
-    private $_TAG_CURRENT_TITLE = '[CURRENT_TITLE]';
-    private $_TAG_CURRENT_PAGE_CONTENT = '[CURRENT_PAGE_CONTENT]';
-    private $_TAG_CURRENT_HTML = '[CURRENT_HTML]';
-
+    private $_tag_current_url = '[CURRENT_URL]';
+    private $_tag_current_title = '[CURRENT_TITLE]';
+    private $_tag_current_page_content = '[CURRENT_PAGE_CONTENT]';
+    private $_tag_current_html = '[CURRENT_HTML]';
     private $_debug = false;
     private $_script = '';
     private $_output = array();
@@ -68,7 +66,6 @@ FRAGMENT;
 
         return $this;
     }
-
 
     /**
      *
@@ -347,7 +344,6 @@ FRAGMENT;
         return $this;
     }
 
-
     /**
      * take a screenshot of the page
      * area defined by
@@ -449,9 +445,7 @@ FRAGMENT;
         $this->_script .= $fragment;
 
         return $this;
-
     }
-
 
     public function evaluate($function)
     {
@@ -481,10 +475,10 @@ FRAGMENT;
 
         $fragment = <<<FRAGMENT
 casper.then(function () {
-    this.echo('$this->_TAG_CURRENT_URL' + this.getCurrentUrl());
-    this.echo('$this->_TAG_CURRENT_TITLE' + this.getTitle());
-    this.echo('$this->_TAG_CURRENT_PAGE_CONTENT' + this.getPageContent());
-    this.echo('$this->_TAG_CURRENT_HTML' + this.getHTML());
+    this.echo('$this->_tag_current_url' + this.getCurrentUrl());
+    this.echo('$this->_tag_current_title' + this.getTitle());
+    this.echo('$this->_tag_current_page_content' + this.getPageContent());
+    this.echo('$this->_tag_current_html' + this.getHTML());
 });
 
 casper.run();
@@ -499,10 +493,10 @@ FRAGMENT;
         // options parsing
         $options = '';
         foreach ($this->_options as $option => $value) {
-            $options .= ' --'.$option.'='.$value;
+            $options .= ' --' . $option . '=' . $value;
         }
 
-        exec('casperjs '.$filename.$options, $output);
+        exec('casperjs ' . $filename . $options, $output);
 
         $this->_setOutput($output);
         $this->_processOutput();
@@ -520,8 +514,8 @@ FRAGMENT;
     private function _processOutput()
     {
         foreach ($this->getOutput() as $outputLine) {
-            if (strpos($outputLine, $this->_TAG_CURRENT_URL) !== false) {
-                $this->_currentUrl = str_replace($this->_TAG_CURRENT_URL, '', $outputLine);
+            if (strpos($outputLine, $this->_tag_current_url) !== false) {
+                $this->_currentUrl = str_replace($this->_tag_current_url, '', $outputLine);
             }
 
             if (strpos($outputLine, "Navigation requested: url=") !== false) {
@@ -532,7 +526,7 @@ FRAGMENT;
             }
 
             if ($this->isDebug()) {
-                syslog(LOG_INFO, '[PHP-CASPERJS] '.$outputLine);
+                syslog(LOG_INFO, '[PHP-CASPERJS] ' . $outputLine);
             }
         }
     }
@@ -545,5 +539,87 @@ FRAGMENT;
     public function getRequestedUrls()
     {
         return $this->_requestedUrls;
+    }
+    
+    public function getSelector($selector)
+    {
+        $fragment = <<<FRAGMENT
+var items = [];
+var items = document.querySelectorAll('$selector');
+return Array.prototype.map.call(items, function(e) {
+    return e.getAttribute('href');
+});
+FRAGMENT;
+
+        $this->_script .= $fragment;
+
+        return $this;
+    }
+    
+    public function getGoogleResult($query)
+    {
+        $fragment = <<<FRAGMENT
+var links = [];
+var casper = require('casper').create();
+
+function getLinks() {
+    var links = document.querySelectorAll('h3.r a');
+    return Array.prototype.map.call(links, function(e) {
+        return e.getAttribute('href');
+    });
+}
+
+casper.start('http://google.com/', function() {
+    // search for 'casperjs' from google form
+    this.fill('form[action="/search"]', { q: '$query' }, true);
+});
+
+casper.then(function() {
+    // aggregate results for the 'casperjs' search
+    links = this.evaluate(getLinks);
+    // now search for 'phantomjs' by filling the form again
+    this.fill('form[action="/search"]', { q: 'phantomjs' }, true);
+});
+
+casper.then(function() {
+    // aggregate results for the 'phantomjs' search
+    links = links.concat(this.evaluate(getLinks));
+});
+
+casper.run(function() {
+    for (var i in links) {
+        this.echo(links[i]);
+    }
+    this.exit();
+});
+FRAGMENT;
+        
+        $this->_script .= $fragment;
+        
+//        echo $fragment;
+//        die();
+
+        $filename = tempnam(null, 'php-casperjs-');
+        file_put_contents($filename, $this->_script);
+
+        // options parsing
+        $options = '';
+//        foreach ($this->_options as $option => $value) {
+//            $options .= ' --' . $option . '=' . $value;
+//        }
+
+        exec('casperjs ' . $filename . $options, $output);
+
+        $this->_setOutput($output);
+        $this->_processOutput();
+
+        unlink($filename);
+        
+        $items = [];
+        foreach ($output as $item) {
+            $items[] = parse_url($item);
+        }
+
+        return $items;
     }
 }
