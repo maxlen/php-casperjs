@@ -1,5 +1,5 @@
 {
-    "name": "maxlen/phpcasperjs",
+    "name": "maxlen/php-casperjs",
     "description": "Simple PHP wrapper for CasperJS",
     "homepage": "https://github.com/maxlen/php-casperjs",
     "keywords": ["phpunit", "test", "browser"],
