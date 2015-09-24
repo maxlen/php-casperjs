@@ -556,57 +556,84 @@ FRAGMENT;
         return $this;
     }
     
-    public function getGoogleResult($query)
+    public function getGoogleResult($query, $start = 0)
     {
+        $query = urlencode($query);
+        $url = "http://www.google.com/search?q={$query}&start={$start}&gws_rd=cr";
         $fragment = <<<FRAGMENT
-var links = [];
-var casper = require('casper').create();
-
-function getLinks() {
-    var links = document.querySelectorAll('h3.r a');
-    return Array.prototype.map.call(links, function(e) {
-        return e.getAttribute('href');
-    });
-}
-
-casper.start('http://google.com/', function() {
-    // search for 'casperjs' from google form
-    this.fill('form[action="/search"]', { q: '$query' }, true);
+var utils = require('utils');
+var casper = require('casper').create({
+    verbose: true,
+    logLevel: 'error',
+    pageSettings: {
+        loadImages: false,
+        loadPlugins: false,
+        userAgent: 'Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/29.0.1547.2 Safari/537.36'
+    }
 });
 
-casper.then(function() {
-    // aggregate results for the 'casperjs' search
-    links = this.evaluate(getLinks);
-    // now search for 'phantomjs' by filling the form again
-    this.fill('form[action="/search"]', { q: 'phantomjs' }, true);
-});
+casper.start('$url');
 
-casper.then(function() {
-    // aggregate results for the 'phantomjs' search
-    links = links.concat(this.evaluate(getLinks));
-});
+casper.waitForSelector(
+        'div#search div#ires',
+        function() {
+            // Get info on all elements matching this CSS selector 
+            var organicBlocks = this.evaluate(function() {
+                var nodes = document.querySelectorAll('div#search div#ires div.rc h3.r a');
+
+                var links = [].map.call(nodes, function(node) {
+                    return node.getAttribute('href');
+                });
+
+                var titles = [].map.call(nodes, function(node) {
+                    return node.textContent;
+                });
+
+                var nodes = document.querySelectorAll('div#search div#ires div.rc span.st');
+                var descriptions = [].map.call(nodes, function(node) {
+                    return node.textContent;
+                });
+
+                var result = [];
+                for (var i = 0; i < links.length; i++) {
+                    result.push({
+                        link: links[i],
+                        title: titles[i],
+                        description: descriptions[i],
+                    });
+                }
+//                var result = {
+//                    links: links,
+//                    titles: titles,
+//                    descriptions: descriptions,
+//                };
+                return result;
+            });
+            this.echo(JSON.stringify(organicBlocks));
+//            utils.dump(organicBlocks);
+        },
+        function() {
+            this.echo('FALSE');
+        },
+        100);
 
 casper.run(function() {
-    for (var i in links) {
-        this.echo(links[i]);
-    }
     this.exit();
 });
 FRAGMENT;
-        
+ 
         $this->_script .= $fragment;
         
-//        echo $fragment;
-//        die();
+        $this->_script .= self::getOrganicLinkObjFunc();
 
         $filename = tempnam(null, 'php-casperjs-');
         file_put_contents($filename, $this->_script);
 
         // options parsing
         $options = '';
-//        foreach ($this->_options as $option => $value) {
-//            $options .= ' --' . $option . '=' . $value;
-//        }
+        foreach ($this->_options as $option => $value) {
+            $options .= ' --' . $option . '=' . $value;
+        }
 
         exec('casperjs ' . $filename . $options, $output);
 
@@ -614,12 +641,16 @@ FRAGMENT;
         $this->_processOutput();
 
         unlink($filename);
-        
-        $items = [];
-        foreach ($output as $item) {
-            $items[] = parse_url($item);
-        }
-
-        return $items;
+        return json_decode($output[0]);
+    }
+    
+    public static function getOrganicLinkObjFunc() {
+        return <<<FRAGMENT
+function Link(link, title, description) {
+    this.link = link;
+    this.title = title;
+    this.description = description;
+}
+FRAGMENT;
     }
 }
